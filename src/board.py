@@ -16,6 +16,31 @@ class Board:
     def calc_moves(self, piece, row, col):
         '''Расчитывает все возможные ходы выбранной фигуры в ее позиции'''
 
+        def pawn_moves():
+            #проверка на количество ходов у пешки
+            steps = 1 if piece.moved else 2
+
+            #вертикальные ходы
+            start = row + piece.dir
+            end = row + (piece.dir * (1 + steps))
+
+            for possible_move_row in range(start, end, piece.dir):
+                if Square.in_range(possible_move_row):
+                    if self.squares[possible_move_row][col].isempty():
+                        #выбираем поля для новго хода
+                        initial = Square(row, col)
+                        final = Square(possible_move_row, col)
+                        #делаем новый ход
+                        move = Move(initial, final)
+                        piece.add_move(move)
+                    #завершаем цикл потому что клетка впереди не пуста
+                    else: break
+                #завершаем цикл потому что клетка вне окна
+                else: break
+
+            #диагональные ходы
+            possible_move_row = row + piece.dir
+
         def khight_moves():
             #8 возможных ходов
             possible_moves = [
@@ -41,23 +66,17 @@ class Board:
                         #делаем новый ход который прошел все проверки
                         piece.add_move(move)
 
-        if isinstance(piece, Pawn):
-            pass
+        if isinstance(piece, Pawn): pawn_moves()
         
-        elif isinstance(piece, Knight):
-            khight_moves()
+        elif isinstance(piece, Knight): khight_moves()
 
-        elif isinstance(piece, Bishop):
-            pass
+        elif isinstance(piece, Bishop): pass
 
-        elif isinstance(piece, Rook):
-            pass
+        elif isinstance(piece, Rook): pass
 
-        elif isinstance(piece, Queen):
-            pass
+        elif isinstance(piece, Queen): pass
 
-        elif isinstance(piece, King):
-            pass
+        elif isinstance(piece, King): pass
 
     def _create(self):
         for row in range(ROWS):
