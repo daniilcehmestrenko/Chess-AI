@@ -27,7 +27,7 @@ class Board:
             for possible_move_row in range(start, end, piece.dir):
                 if Square.in_range(possible_move_row):
                     if self.squares[possible_move_row][col].isempty():
-                        #выбираем поля для новго хода
+                        #выбираем поля для нового хода
                         initial = Square(row, col)
                         final = Square(possible_move_row, col)
                         #делаем новый ход
@@ -40,6 +40,18 @@ class Board:
 
             #диагональные ходы
             possible_move_row = row + piece.dir
+            possible_move_cols = [col-1, col+1]
+            #проверяем на наличие пешки другого цвета если есть то ходить по диагонали можно
+            for possible_move_col in possible_move_cols:
+                if Square.in_range(possible_move_row, possible_move_col):
+                    if self.squares[possible_move_row][possible_move_col].has_rival_piece(piece.color):
+                        #указываем кординаты начала и конца хода
+                        initial = Square(row, col)
+                        final = Square(possible_move_row, possible_move_col)
+                        #делаем ход
+                        move = Move(initial, final)
+                        #добавляем ход
+                        piece.add_move(move)
 
         def khight_moves():
             #8 возможных ходов
@@ -66,17 +78,105 @@ class Board:
                         #делаем новый ход который прошел все проверки
                         piece.add_move(move)
 
-        if isinstance(piece, Pawn): pawn_moves()
+        def king_moves():
+            adjs = [
+                (row-1, col+0), #вверх
+                (row-1, col+1), #вверх вправо
+                (row+0, col+1), #вправо
+                (row+1, col+1), #вниз вправо
+                (row+1, col+0), #вниз
+                (row+1, col-1), #вниз влево
+                (row+0, col-1), #влево
+                (row-1, col-1), #вверх влево
+            ]
+
+            for possible_move in adjs:
+                possible_move_row, possible_move_col = possible_move
+                
+                if Square.in_range(possible_move_row, possible_move_col):
+
+                    if self.squares[possible_move_row][possible_move_col].isempty_or_rival(piece.color):
+                        #выбираем поля для нового хода
+                        initial = Square(row, col)
+                        final = Square(possible_move_row, possible_move_col)#piece=piece
+                        #создаем новый ход
+                        move = Move(initial, final)
+                        #делаем новый ход который прошел все проверки
+                        piece.add_move(move)
+
+        def straightline_moves(incrs):
+            for incr in incrs:
+                row_incr, col_incr = incr
+                possible_move_row = row + row_incr
+                possible_move_col = col + col_incr
+
+                while True:
+                    if Square.in_range(possible_move_row, possible_move_col):
+
+                        #выбираем поля для возможного нового хода
+                        initial = Square(row, col)
+                        final = Square(possible_move_row, possible_move_col)
+
+                        #делаем новый возможный ход
+                        move = Move(initial, final)
+
+                        #если путь пустой мы не завершаем цикл
+                        if self.squares[possible_move_row][possible_move_col].isempty():
+                            #добавляем новый ход
+                            piece.add_move(move)
+
+                        #если на пути есть противник
+                        if self.squares[possible_move_row][possible_move_col].has_rival_piece(piece.color):
+                            #добавляем новый ход
+                            piece.add_move(move)
+                            break
+
+                        #если на пути есть союзная фигура
+                        if self.squares[possible_move_row][possible_move_col].has_team_piece(piece.color):
+                            break
+                    
+                    #за пределами доски
+                    else: break
+
+                    possible_move_row = possible_move_row + row_incr
+                    possible_move_col = possible_move_col + col_incr
+
+        if isinstance(piece, Pawn):
+            pawn_moves()
         
-        elif isinstance(piece, Knight): khight_moves()
+        elif isinstance(piece, Knight):
+            khight_moves()
 
-        elif isinstance(piece, Bishop): pass
+        elif isinstance(piece, Bishop):
+            straightline_moves([
+                (-1, 1), #верхняя правая диагональ
+                (-1, -1), #верхняя левая диагональ
+                (1, 1), #нижняя правая диагональ
+                (1, -1) #нижняя левая диагональ
+            ])
 
-        elif isinstance(piece, Rook): pass
+        elif isinstance(piece, Rook):
+            straightline_moves([
+                (-1, 0), #вверх
+                (1, 0), #вниз
+                (0, 1), #вправо
+                (0, -1) #влево
+            ])
 
-        elif isinstance(piece, Queen): pass
+        elif isinstance(piece, Queen):
+            straightline_moves([
+                (-1, 1), #верхняя правая диагональ
+                (-1, -1), #верхняя левая диагональ
+                (1, 1), #нижняя правая диагональ
+                (1, -1), #нижняя левая диагональ
+                (-1, 0), #вверх
+                (1, 0), #вниз
+                (0, 1), #вправо
+                (0, -1) #влево
+            ])
 
-        elif isinstance(piece, King): pass
+        elif isinstance(piece, King):
+            king_moves()
 
     def _create(self):
         for row in range(ROWS):
