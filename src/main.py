@@ -90,7 +90,12 @@ class Main:
 
                         #проверка валидности хода
                         if board.valid_move(dragger.piece, move):
+
+                            captured = board.squares[released_row][released_col].has_piece()
+
                             board.move(dragger.piece, move)
+                            #звук хода или атаки на фигуру
+                            game.play_sound(captured)
                             #рисуем ход на доске
                             game.show_bg(screen)
                             game.show_last_move(screen)
@@ -99,6 +104,12 @@ class Main:
                             game.next_turn()
 
                     dragger.undrag_piece()
+
+                #меняем тему при нажатии t
+                elif event.type == pygame.KEYDOWN:
+
+                    if event.key == pygame.K_t:
+                        game.change_theme()
 
                 #закрытие окна
                 elif event.type == pygame.QUIT:
