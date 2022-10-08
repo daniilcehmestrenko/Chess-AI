@@ -1,7 +1,10 @@
+import copy
+
 from const import *
 from piece import *
 from square import Square
 from move import Move
+from sound import Sound
 
 
 class Board:
@@ -13,20 +16,37 @@ class Board:
         self._add_pieces('white')
         self._add_pieces('black')
 
-    def move(self, piece, move):
+    def move(self, piece, move, testing=False):
         initial = move.initial
         final = move.final
 
-        #обновление ходов
+        en_passant_empty = self.squares[final.row][final.col].isempty()
+
+        #съедаем фигуру
         self.squares[initial.row][initial.col].piece = None
         self.squares[final.row][final.col].piece = piece
+
+        if isinstance(piece, Pawn):
+            diff = final.col - initial.col
+            #съедаем пешку на проходе
+            if diff != 0 and en_passant_empty:
+                #съедаем фигуру
+                self.squares[initial.row][initial.col+diff].piece = None
+                self.squares[final.row][final.col].piece = piece
+                if not testing:
+                    sound = Sound(
+                        os.path.join('assets/sounds/capture.wav')
+                    )
+                    sound.play()
+            else:
+                self.check_promotion(piece, final)
 
         if isinstance(piece, Pawn):
             self.check_promotion(piece, final)
         
         #королевская рокировка
         if isinstance(piece, King):
-            if self.castling(initial, final):
+            if self.castling(initial, final) and not testing:
                 diff = final.col - initial.col
                 rook = piece.left_rook if (diff < 0) else piece.right_rook
                 self.move(rook, rook.moves[-1])
@@ -51,7 +71,36 @@ class Board:
     def castling(self, initial, final):
         return abs(initial.col - final.col) == 2
 
-    def calc_moves(self, piece, row, col):
+    def set_true_en_passant(self, piece):
+        
+        if not isinstance(piece, Pawn):
+            return
+        
+        for row in range(ROWS):
+            for col in range(COLS):
+                if isinstance(self.squares[row][col].piece, Pawn):
+                    self.squares[row][col].piece.en_passant = False
+
+        piece.en_passant = True
+
+    def in_check(self, piece, move):
+        temp_piece = copy.deepcopy(piece)
+        temp_board = copy.deepcopy(self)
+
+        temp_board.move(temp_piece, move, testing=True)
+
+        for row in range(ROWS):
+            for col in range(COLS):
+                if temp_board.squares[row][col].has_rival_piece(piece.color):
+                    p = temp_board.squares[row][col].piece
+                    temp_board.calc_moves(p, row, col, bool=False)
+                    for m in p.moves:
+                        if isinstance(m.final.piece, King):
+                            return True
+        
+        return False
+
+    def calc_moves(self, piece, row, col, bool=True):
         '''Расчитывает все возможные ходы выбранной фигуры в ее позиции'''
 
         def pawn_moves():
@@ -70,7 +119,13 @@ class Board:
                         final = Square(possible_move_row, col)
                         #делаем новый ход
                         move = Move(initial, final)
-                        piece.add_move(move)
+
+                        #проверяем не связана ли фигура с королем
+                        if bool:
+                            if not self.in_check(piece, move):
+                                piece.add_move(move)
+                        else:
+                            piece.add_move(move)
                     #завершаем цикл потому что клетка впереди не пуста
                     else: break
                 #завершаем цикл потому что клетка вне окна
@@ -85,11 +140,55 @@ class Board:
                     if self.squares[possible_move_row][possible_move_col].has_rival_piece(piece.color):
                         #указываем кординаты начала и конца хода
                         initial = Square(row, col)
-                        final = Square(possible_move_row, possible_move_col)
+                        final_piece = self.squares[possible_move_row][possible_move_col].piece
+                        final = Square(possible_move_row, possible_move_col, final_piece)
                         #делаем ход
                         move = Move(initial, final)
-                        #добавляем ход
-                        piece.add_move(move)
+                        #проверяем не связана ли фигура с королем
+                        if bool:
+                            if not self.in_check(piece, move):
+                                piece.add_move(move)
+                        else:
+                            piece.add_move(move)
+
+            #взятие пешки на проходе
+            r = 3 if piece.color == 'white' else 4
+            fr = 2 if piece.color == 'white' else 5
+            #проверка на левую часть
+            if Square.in_range(col-1) and row == r:
+                if self.squares[row][col-1].has_rival_piece(piece.color):
+                    p = self.squares[row][col-1].piece
+                    if isinstance(p, Pawn):
+                        if p.en_passant:
+                            #указываем кординаты начала и конца хода
+                            initial = Square(row, col)
+                            final = Square(fr, col-1, p)
+                            #делаем ход
+                            move = Move(initial, final)
+                            #проверяем не связана ли фигура с королем
+                            if bool:
+                                if not self.in_check(piece, move):
+                                    piece.add_move(move)
+                            else:
+                                piece.add_move(move)
+            
+            #проверка на правую часть
+            if Square.in_range(col+1) and row == r:
+                if self.squares[row][col+1].has_rival_piece(piece.color):
+                    p = self.squares[row][col+1].piece
+                    if isinstance(p, Pawn):
+                        if p.en_passant:
+                            #указываем кординаты начала и конца хода
+                            initial = Square(row, col)
+                            final = Square(fr, col+1, p)
+                            #делаем ход
+                            move = Move(initial, final)
+                            #проверяем не связана ли фигура с королем
+                            if bool:
+                                if not self.in_check(piece, move):
+                                    piece.add_move(move)
+                            else:
+                                piece.add_move(move)
 
         def khight_moves():
             #8 возможных ходов
@@ -110,11 +209,17 @@ class Board:
                     if self.squares[possible_move_row][possible_move_col].isempty_or_rival(piece.color):
                         #выбираем поля для нового хода
                         initial = Square(row, col)
-                        final = Square(possible_move_row, possible_move_col)#piece=piece
+                        final_piece = self.squares[possible_move_row][possible_move_col].piece
+                        final = Square(possible_move_row, possible_move_col, final_piece)
                         #создаем новый ход
                         move = Move(initial, final)
-                        #делаем новый ход который прошел все проверки
-                        piece.add_move(move)
+                        #проверяем не связана ли фигура с королем
+                        if bool:
+                            if not self.in_check(piece, move):
+                                piece.add_move(move)
+                            else: break
+                        else:
+                            piece.add_move(move)
 
         def king_moves():
             adjs = [
@@ -139,8 +244,13 @@ class Board:
                         final = Square(possible_move_row, possible_move_col)#piece=piece
                         #создаем новый ход
                         move = Move(initial, final)
-                        #делаем новый ход который прошел все проверки
-                        piece.add_move(move)
+                        #проверяем не связана ли фигура с королем
+                        if bool:
+                            if not self.in_check(piece, move):
+                                piece.add_move(move)
+                            else: break
+                        else:
+                            piece.add_move(move)
             
             #рокировка
             if not piece.moved:
@@ -161,14 +271,21 @@ class Board:
                                 #перемещаем ладью
                                 initial = Square(row, 0)
                                 final = Square(row, 3)
-                                move = Move(initial, final)
-                                left_rook.add_move(move)
+                                moveR = Move(initial, final)
 
                                 #перемещаем короля
                                 initial = Square(row, col)
                                 final = Square(row, 2)
-                                move = Move(initial, final)
-                                piece.add_move(move)
+                                moveK = Move(initial, final)
+                                
+                                #проверяем не связана ли фигура с королем
+                                if bool:
+                                    if not self.in_check(piece, moveK) and not self.in_check(left_rook, moveR):
+                                        left_rook.add_move(moveR)
+                                        piece.add_move(moveK)
+                                else:
+                                    left_rook.add_move(moveR)
+                                    piece.add_move(moveK)
                 
                 #рокировка в сторону короля
                 right_rook = self.squares[row][7].piece
@@ -186,14 +303,20 @@ class Board:
                                 #перемещаем ладью
                                 initial = Square(row, 7)
                                 final = Square(row, 5)
-                                move = Move(initial, final)
-                                right_rook.add_move(move)
+                                moveR = Move(initial, final)
 
                                 #перемещаем короля
                                 initial = Square(row, col)
                                 final = Square(row, 6)
-                                move = Move(initial, final)
-                                piece.add_move(move)
+                                moveK = Move(initial, final)
+
+                                if bool:
+                                    if not self.in_check(piece, moveK) and not self.in_check(right_rook, moveR):
+                                        right_rook.add_move(moveR)
+                                        piece.add_move(moveK)
+                                else:
+                                    right_rook.add_move(moveR)
+                                    piece.add_move(moveK)
 
         def straightline_moves(incrs):
             for incr in incrs:
@@ -206,24 +329,33 @@ class Board:
 
                         #выбираем поля для возможного нового хода
                         initial = Square(row, col)
-                        final = Square(possible_move_row, possible_move_col)
+                        final_piece = self.squares[possible_move_row][possible_move_col].piece
+                        final = Square(possible_move_row, possible_move_col, final_piece)
 
                         #делаем новый возможный ход
                         move = Move(initial, final)
 
                         #если путь пустой мы не завершаем цикл
                         if self.squares[possible_move_row][possible_move_col].isempty():
-                            #добавляем новый ход
-                            piece.add_move(move)
+                            #проверяем не связана ли фигура с королем
+                            if bool:
+                                if not self.in_check(piece, move):
+                                    piece.add_move(move)
+                            else:
+                                piece.add_move(move)
 
                         #если на пути есть противник
-                        if self.squares[possible_move_row][possible_move_col].has_rival_piece(piece.color):
-                            #добавляем новый ход
-                            piece.add_move(move)
+                        elif self.squares[possible_move_row][possible_move_col].has_rival_piece(piece.color):
+                            #проверяем не связана ли фигура с королем
+                            if bool:
+                                if not self.in_check(piece, move):
+                                    piece.add_move(move)
+                            else:
+                                piece.add_move(move)
                             break
 
                         #если на пути есть союзная фигура
-                        if self.squares[possible_move_row][possible_move_col].has_team_piece(piece.color):
+                        elif self.squares[possible_move_row][possible_move_col].has_team_piece(piece.color):
                             break
                     
                     #за пределами доски

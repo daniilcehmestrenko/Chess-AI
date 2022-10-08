@@ -48,7 +48,7 @@ class Main:
                         piece = board.squares[clicked_row][clicked_col].piece
                         #проверяем цвет фигуры с очередью хода
                         if piece.color == game.next_player:
-                            board.calc_moves(piece, clicked_row, clicked_col)
+                            board.calc_moves(piece, clicked_row, clicked_col, bool=True)
                             dragger.save_initial(event.pos)
                             dragger.drag_piece(piece)
                             #показываем доску
@@ -94,6 +94,9 @@ class Main:
                             captured = board.squares[released_row][released_col].has_piece()
 
                             board.move(dragger.piece, move)
+
+                            board.set_true_en_passant(dragger.piece)
+
                             #звук хода или атаки на фигуру
                             game.play_sound(captured)
                             #рисуем ход на доске
